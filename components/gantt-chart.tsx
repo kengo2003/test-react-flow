@@ -195,7 +195,7 @@ export default function GanttChart() {
           data: {
             ...task,
             width: 280,
-            height: 100,
+            height: 130,
             onTaskClick: handleTaskClick,
             onDateChange: handleDateChange,
             onSuggestTask: handleSuggestTask,
@@ -216,7 +216,10 @@ export default function GanttChart() {
         target: task.id,
         type: "smoothstep",
         animated: true,
-        style: { stroke: "#6366f1", strokeWidth: 2 },
+        style: {
+          stroke: "#4f46e5",
+          strokeWidth: 3,
+        },
       }));
   }, [processedTasks]);
 
@@ -264,7 +267,7 @@ export default function GanttChart() {
         data: {
           ...newTask,
           width: 280,
-          height: 100,
+          height: 130,
           onTaskClick: handleTaskClick,
           onDateChange: handleDateChange,
           onSuggestTask: handleSuggestTask,
@@ -281,7 +284,10 @@ export default function GanttChart() {
           target: newTask.id,
           type: "smoothstep",
           animated: true,
-          style: { stroke: "#6366f1", strokeWidth: 2 },
+          style: {
+            stroke: "#4f46e5",
+            strokeWidth: 3,
+          },
         };
         setEdges((eds) => [...eds, newEdge]);
       }
