@@ -158,15 +158,20 @@ export default function GanttChart() {
     });
   }, []);
 
-  // ノードの生成
-  const initialNodes: TaskNodeType[] = useMemo(() => {
+  // ノード生成ロジックを関数化
+  function generateNodesFromTasks(
+    tasks: (Task & { children?: Task[] })[],
+    handleTaskClick: (taskId: string) => void,
+    handleDateChange: (taskId: string, newDate: string) => void,
+    handleSuggestTask: (taskId: string) => void
+  ): TaskNodeType[] {
     // 1. タスクをIDでマップ化
     const taskMap: Record<string, Task & { children?: Task[] }> = {};
-    processedTasks.forEach((task) => {
+    tasks.forEach((task) => {
       taskMap[task.id] = { ...task, children: [] };
     });
     // 2. 親子関係を構築
-    processedTasks.forEach((task) => {
+    tasks.forEach((task) => {
       if (task.parent && taskMap[task.parent]) {
         taskMap[task.parent].children!.push(taskMap[task.id]);
       }
@@ -180,17 +185,12 @@ export default function GanttChart() {
     const nodeHeight = 130;
     const xGap = 350;
     const yGap = 50;
-
-    // y座標の現在値を管理
     let globalY = 50;
-
-    // 再帰配置関数
     function placeNode(
       task: Task & { children?: Task[] },
       x: number,
       y: number
     ): number {
-      // ノード追加
       nodes.push({
         id: task.id,
         type: "taskNode",
@@ -204,33 +204,35 @@ export default function GanttChart() {
           onSuggestTask: handleSuggestTask,
         },
       });
-      // 子がいなければ高さ分だけ下に進める
       if (!task.children || task.children.length === 0) {
         return y + nodeHeight + yGap;
       }
-      // 1つ目の子は親の右隣、2つ目以降は1つ目の子の下に縦並び
       let childY = y;
       for (let i = 0; i < task.children.length; i++) {
         if (i === 0) {
-          // 1つ目の子は親の右隣
           childY = placeNode(task.children[i], x + xGap, y);
         } else {
-          // 2つ目以降は直前の子の下
           childY = placeNode(task.children[i], x + xGap, childY);
         }
       }
-      // 一番下のyを返す
       return childY;
     }
-
-    // ルートごとに配置
     let startY = globalY;
     roots.forEach((root) => {
       const nextY = placeNode(root, 50, startY);
       startY = nextY;
     });
-
     return nodes;
+  }
+
+  // ノードの生成
+  const initialNodes: TaskNodeType[] = useMemo(() => {
+    return generateNodesFromTasks(
+      processedTasks,
+      handleTaskClick,
+      handleDateChange,
+      handleSuggestTask
+    );
   }, [processedTasks]);
 
   // エッジの生成（依存関係）
@@ -286,53 +288,16 @@ export default function GanttChart() {
         status: "pending",
       };
 
-      // 親ノードの位置を取得
-      let parentNode = null;
-      if (newTask.parent) {
-        parentNode = nodes.find((n) => n.id === newTask.parent);
-      }
-      // 既存の子ノードを取得
-      let siblingNodes: typeof nodes = [];
-      if (newTask.parent) {
-        siblingNodes = nodes.filter((n) => n.data.parent === newTask.parent);
-      }
-      // 配置ロジック
-      let newX = 50;
-      let newY = 50;
-      const nodeWidth = 280;
-      const nodeHeight = 130;
-      const xGap = 350;
-      const yGap = 50;
-      if (parentNode) {
-        newX = parentNode.position.x + xGap;
-        if (siblingNodes.length === 0) {
-          // まだ子がいなければ親のyと同じ
-          newY = parentNode.position.y;
-        } else {
-          // 既存の子がいれば一番下の子の下
-          const lastChild = siblingNodes.reduce((a, b) =>
-            a.position.y > b.position.y ? a : b
-          );
-          newY = lastChild.position.y + nodeHeight + yGap;
-        }
-      }
-
-      // ノードを追加
-      const newNode: TaskNodeType = {
-        id: newTask.id,
-        type: "taskNode",
-        position: { x: newX, y: newY },
-        data: {
-          ...newTask,
-          width: nodeWidth,
-          height: nodeHeight,
-          onTaskClick: handleTaskClick,
-          onDateChange: handleDateChange,
-          onSuggestTask: handleSuggestTask,
-        },
-      };
-
-      setNodes((nds) => [...nds, newNode]);
+      // 新しいタスクを含めた全タスクリストを作成
+      const newTasks = [...processedTasks, newTask];
+      // ノード全体を再レイアウト
+      const newNodes = generateNodesFromTasks(
+        newTasks,
+        handleTaskClick,
+        handleDateChange,
+        handleSuggestTask
+      );
+      setNodes(newNodes);
 
       // 依存関係のエッジを追加
       if (newTask.parent) {
@@ -353,13 +318,13 @@ export default function GanttChart() {
       console.log("新しいタスクを作成:", newTask);
     },
     [
-      nodes,
-      suggestedTasksModal.parentTaskId,
-      setNodes,
-      setEdges,
+      processedTasks,
       handleTaskClick,
       handleDateChange,
       handleSuggestTask,
+      setNodes,
+      setEdges,
+      suggestedTasksModal.parentTaskId,
     ]
   );
 
