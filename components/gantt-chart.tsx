@@ -160,49 +160,76 @@ export default function GanttChart() {
 
   // ノードの生成
   const initialNodes: TaskNodeType[] = useMemo(() => {
-    // 1. 階層（深さ）を計算
-    const getTaskDepth = (
-      task: Task,
-      tasks: Task[],
-      cache: Record<string, number> = {}
-    ): number => {
-      if (cache[task.id] !== undefined) return cache[task.id];
-      if (!task.parent) return 0;
-      const parentTask = tasks.find((t) => t.id === task.parent);
-      const depth = parentTask ? getTaskDepth(parentTask, tasks, cache) + 1 : 0;
-      cache[task.id] = depth;
-      return depth;
-    };
-
-    // 2. 各階層ごとにタスクをグループ化
-    const depthMap: Record<number, Task[]> = {};
-    const depthCache: Record<string, number> = {};
+    // 1. タスクをIDでマップ化
+    const taskMap: Record<string, Task & { children?: Task[] }> = {};
     processedTasks.forEach((task) => {
-      const depth = getTaskDepth(task, processedTasks, depthCache);
-      if (!depthMap[depth]) depthMap[depth] = [];
-      depthMap[depth].push(task);
+      taskMap[task.id] = { ...task, children: [] };
+    });
+    // 2. 親子関係を構築
+    processedTasks.forEach((task) => {
+      if (task.parent && taskMap[task.parent]) {
+        taskMap[task.parent].children!.push(taskMap[task.id]);
+      }
+    });
+    // 3. ルートタスクを抽出
+    const roots = Object.values(taskMap).filter((task) => !task.parent);
+
+    // 4. 再帰的にノード配置
+    const nodes: TaskNodeType[] = [];
+    const nodeWidth = 280;
+    const nodeHeight = 130;
+    const xGap = 350;
+    const yGap = 50;
+
+    // y座標の現在値を管理
+    let globalY = 50;
+
+    // 再帰配置関数
+    function placeNode(
+      task: Task & { children?: Task[] },
+      x: number,
+      y: number
+    ): number {
+      // ノード追加
+      nodes.push({
+        id: task.id,
+        type: "taskNode",
+        position: { x, y },
+        data: {
+          ...task,
+          width: nodeWidth,
+          height: nodeHeight,
+          onTaskClick: handleTaskClick,
+          onDateChange: handleDateChange,
+          onSuggestTask: handleSuggestTask,
+        },
+      });
+      // 子がいなければ高さ分だけ下に進める
+      if (!task.children || task.children.length === 0) {
+        return y + nodeHeight + yGap;
+      }
+      // 1つ目の子は親の右隣、2つ目以降は1つ目の子の下に縦並び
+      let childY = y;
+      for (let i = 0; i < task.children.length; i++) {
+        if (i === 0) {
+          // 1つ目の子は親の右隣
+          childY = placeNode(task.children[i], x + xGap, y);
+        } else {
+          // 2つ目以降は直前の子の下
+          childY = placeNode(task.children[i], x + xGap, childY);
+        }
+      }
+      // 一番下のyを返す
+      return childY;
+    }
+
+    // ルートごとに配置
+    let startY = globalY;
+    roots.forEach((root) => {
+      const nextY = placeNode(root, 50, startY);
+      startY = nextY;
     });
 
-    // 3. ノード生成
-    const nodes: TaskNodeType[] = [];
-    Object.entries(depthMap).forEach(([depthStr, tasksAtDepth]) => {
-      const depth = Number(depthStr);
-      tasksAtDepth.forEach((task, i) => {
-        nodes.push({
-          id: task.id,
-          type: "taskNode",
-          position: { x: depth * 350 + 50, y: i * 180 + 50 },
-          data: {
-            ...task,
-            width: 280,
-            height: 130,
-            onTaskClick: handleTaskClick,
-            onDateChange: handleDateChange,
-            onSuggestTask: handleSuggestTask,
-          },
-        });
-      });
-    });
     return nodes;
   }, [processedTasks]);
 
@@ -259,15 +286,46 @@ export default function GanttChart() {
         status: "pending",
       };
 
+      // 親ノードの位置を取得
+      let parentNode = null;
+      if (newTask.parent) {
+        parentNode = nodes.find((n) => n.id === newTask.parent);
+      }
+      // 既存の子ノードを取得
+      let siblingNodes: typeof nodes = [];
+      if (newTask.parent) {
+        siblingNodes = nodes.filter((n) => n.data.parent === newTask.parent);
+      }
+      // 配置ロジック
+      let newX = 50;
+      let newY = 50;
+      const nodeWidth = 280;
+      const nodeHeight = 130;
+      const xGap = 350;
+      const yGap = 50;
+      if (parentNode) {
+        newX = parentNode.position.x + xGap;
+        if (siblingNodes.length === 0) {
+          // まだ子がいなければ親のyと同じ
+          newY = parentNode.position.y;
+        } else {
+          // 既存の子がいれば一番下の子の下
+          const lastChild = siblingNodes.reduce((a, b) =>
+            a.position.y > b.position.y ? a : b
+          );
+          newY = lastChild.position.y + nodeHeight + yGap;
+        }
+      }
+
       // ノードを追加
       const newNode: TaskNodeType = {
         id: newTask.id,
         type: "taskNode",
-        position: { x: nodes.length * 300 + 50, y: 50 },
+        position: { x: newX, y: newY },
         data: {
           ...newTask,
-          width: 280,
-          height: 130,
+          width: nodeWidth,
+          height: nodeHeight,
           onTaskClick: handleTaskClick,
           onDateChange: handleDateChange,
           onSuggestTask: handleSuggestTask,
@@ -295,7 +353,7 @@ export default function GanttChart() {
       console.log("新しいタスクを作成:", newTask);
     },
     [
-      nodes.length,
+      nodes,
       suggestedTasksModal.parentTaskId,
       setNodes,
       setEdges,
