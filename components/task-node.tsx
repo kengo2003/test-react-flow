@@ -78,7 +78,7 @@ export const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
         <div className="space-y-2">
           <div className="flex items-start justify-between">
             <h3 className="text-sm font-medium text-gray-900 line-clamp-2">
-              {data.name}
+              {data.title}
             </h3>
           </div>
 
@@ -145,7 +145,7 @@ export const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
       {/* 候補タスクのリスト表示をここに復元 */}
       {data.isSuggestionActive && data.currentSuggestedTasks && (
         <div
-          className="absolute left-[calc(100%_+_10px)] top-0 w-[320px] bg-white border border-gray-300 rounded-lg shadow-xl z-20 p-4 space-y-3"
+          className="absolute left-[calc(100%_+_10px)] top-0 w-[320px] bg-white border border-gray-300 rounded-lg shadow-xl z-50 p-4 space-y-3"
           onClick={(e) => e.stopPropagation()} // イベントの伝播を止める
         >
           <div className="flex justify-between items-center mb-2">
@@ -174,71 +174,100 @@ export const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
             data.currentSuggestedTasks.map((suggestion) => (
               <div
                 key={suggestion.id}
-                className="p-3 border border-gray-200 rounded-md bg-gray-50 hover:shadow-sm transition-shadow duration-150"
+                className="p-3 border border-gray-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-all duration-150 flex flex-col justify-between"
+                style={{ width: "100%", height: data.height }} // TaskNodeの高さに合わせる
               >
-                <div className="flex justify-between items-start mb-1">
-                  <h5 className="text-sm font-medium text-gray-900">
-                    {suggestion.title}
-                  </h5>
-                  {suggestion.accuracy && (
+                {/* Main content area - similar to TaskNode */}
+                <div className="space-y-1.5 flex-grow">
+                  <div className="flex items-start justify-between">
+                    <h3 className="text-sm font-medium text-gray-900 line-clamp-2">
+                      {suggestion.title}
+                    </h3>
+                    {/* Accuracy - Temporarily removed */}
+                  </div>
+
+                  {suggestion.description && (
+                    <p className="text-xs text-gray-600 leading-normal line-clamp-2">
+                      {suggestion.description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-2">
                     <Badge
-                      variant="outline"
-                      className={`text-xs ${
-                        suggestion.accuracy >= 90
-                          ? "border-green-500 text-green-700 bg-green-50"
-                          : suggestion.accuracy >= 85
-                          ? "border-yellow-500 text-yellow-700 bg-yellow-50"
-                          : "border-red-500 text-red-700 bg-red-50"
-                      }`}
+                      variant="secondary"
+                      className={cn(
+                        "text-white text-xs",
+                        getStatusColor(suggestion.status)
+                      )}
                     >
-                      {suggestion.accuracy}%
+                      {getStatusText(suggestion.status)}
                     </Badge>
-                  )}
+                  </div>
                 </div>
-                {suggestion.description && (
-                  <p className="text-xs text-gray-600 leading-relaxed mb-2">
-                    {suggestion.description}
-                  </p>
-                )}
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
-                  {suggestion.agentName && (
-                    <span className="font-medium">
-                      Agent: {suggestion.agentName}
-                    </span>
-                  )}
-                  {suggestion.estimatedTime && (
-                    <span>Est. Time: {suggestion.estimatedTime}</span>
-                  )}
-                </div>
-                <div className="flex justify-end space-x-2">
-                  {data.onRejectSuggestion && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700 h-7 px-3"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        data.onRejectSuggestion &&
-                          data.onRejectSuggestion(data.id, suggestion.id);
-                      }}
-                    >
-                      <X className="h-3 w-3 mr-1" /> 拒否
-                    </Button>
-                  )}
-                  {data.onApproveSuggestion && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-green-600 border-green-300 hover:bg-green-50 hover:text-green-700 h-7 px-3"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        data.onApproveSuggestion &&
-                          data.onApproveSuggestion(data.id, suggestion);
-                      }}
-                    >
-                      <Check className="h-3 w-3 mr-1" /> 承認
-                    </Button>
-                  )}
+
+                {/* Footer area - now includes action buttons */}
+                <div className="flex justify-between items-center pt-1 border-t border-gray-100 mt-1 space-x-2">
+                  {/* Left side: Assignee and Dates */}
+                  <div className="space-y-0.5">
+                    {(suggestion.assignee || suggestion.agentName) && (
+                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <User className="h-3 w-3" />
+                        <span>
+                          {suggestion.assignee || suggestion.agentName}
+                        </span>
+                      </div>
+                    )}
+                    {(suggestion.startDate || suggestion.end) && (
+                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                        <Calendar className="h-3 w-3" />
+                        <span>
+                          {suggestion.startDate
+                            ? new Date(suggestion.startDate).toLocaleDateString(
+                                "ja-JP"
+                              )
+                            : "?"}
+                          {" - "}
+                          {suggestion.end
+                            ? new Date(suggestion.end).toLocaleDateString(
+                                "ja-JP"
+                              )
+                            : "?"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right side: Action Buttons */}
+                  <div className="flex space-x-2">
+                    {data.onRejectSuggestion && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="rounded-full w-8 h-8 bg-red-100 border-red-500 text-red-500 hover:bg-red-200 hover:text-red-600 shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          data.onRejectSuggestion &&
+                            data.onRejectSuggestion(data.id, suggestion.id);
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {data.onApproveSuggestion && (
+                      <Button
+                        variant="default"
+                        size="icon"
+                        className="rounded-full w-8 h-8 bg-green-500 text-white hover:bg-green-600 shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          data.onApproveSuggestion &&
+                            data.onApproveSuggestion(data.id, suggestion);
+                        }}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))

@@ -29,7 +29,7 @@ const nodeTypes = {
 export const mockTasks: Task[] = [
   {
     id: "task1-1",
-    name: "タスク1",
+    title: "タスク1",
     startDate: "2025-06-01",
     end: "2025-06-13",
     status: "running" as const,
@@ -37,7 +37,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: "task1-2",
-    name: "タスク2",
+    title: "タスク2",
     startDate: "2025-06-10",
     end: "2025-06-15",
     parent: "task1-1",
@@ -46,7 +46,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: "task1-3",
-    name: "タスク3",
+    title: "タスク3",
     startDate: "2025-06-14",
     end: "2025-06-20",
     parent: "task1-2",
@@ -55,7 +55,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: "task1",
-    name: "プロジェクト計画",
+    title: "プロジェクト計画",
     startDate: "2025-05-25",
     end: "2025-06-01",
     status: "done" as const,
@@ -63,7 +63,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: "task2",
-    name: "要件定義",
+    title: "要件定義",
     startDate: "2025-06-01",
     end: "2025-06-10",
     parent: "task1",
@@ -72,7 +72,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: "task3",
-    name: "デザイン",
+    title: "デザイン",
     startDate: "2025-06-10",
     end: "2025-06-20",
     parent: "task1",
@@ -81,7 +81,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: "task4",
-    name: "フロントエンド開発",
+    title: "フロントエンド開発",
     startDate: "2025-07-01",
     end: "2025-07-09",
     parent: "task3",
@@ -90,7 +90,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: "task5",
-    name: "バックエンド開発",
+    title: "バックエンド開発",
     startDate: "2025-07-01",
     end: "2025-07-10",
     parent: "task3",
@@ -99,7 +99,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: "task6",
-    name: "テスト",
+    title: "テスト",
     startDate: "2025-07-15",
     end: "2025-07-21",
     parent: "task4",
@@ -108,7 +108,7 @@ export const mockTasks: Task[] = [
   },
   {
     id: "task7",
-    name: "デプロイ",
+    title: "デプロイ",
     startDate: "2025-07-21",
     end: "2025-07-27",
     parent: "task5",
@@ -194,33 +194,52 @@ export default function GanttChart() {
         !currentSuggestedTasks[parentId] ||
         currentSuggestedTasks[parentId].length === 0
       ) {
+        const today = new Date();
         const mockSuggestions: SuggestedTask[] = [
           {
             id: "sug1-" + parentId,
             title: "実現可能性分析",
             description: "技術的・ビジネス的実現可能性を分析",
             agentName: "FeasibilityAgent",
+            assignee: "FeasibilityAgent",
             estimatedTime: "2-3 min",
             accuracy: 92,
             estimatedDuration: 2,
+            status: "suggested",
+            startDate: today.toISOString().split("T")[0],
+            end: new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
           },
           {
             id: "sug2-" + parentId,
             title: "コスト見積もり",
             description: "費用対効果、CAPEX, OPEXを算出",
             agentName: "CostAgent",
+            assignee: "CostAgent",
             estimatedTime: "3-4 min",
             accuracy: 87,
             estimatedDuration: 3,
+            status: "suggested",
+            startDate: today.toISOString().split("T")[0],
+            end: new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
           },
           {
             id: "sug3-" + parentId,
             title: "再利用性評価",
             description: "再利用可能なパターンや既存資産を特定",
             agentName: "ReuseAgent",
+            assignee: "ReuseAgent",
             estimatedTime: "2-3 min",
             accuracy: 89,
             estimatedDuration: 2,
+            status: "suggested",
+            startDate: today.toISOString().split("T")[0],
+            end: new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
           },
         ];
         setCurrentSuggestedTasks((prev) => ({
@@ -247,7 +266,7 @@ export default function GanttChart() {
       );
       const newTask: Task = {
         id: `task-${Date.now()}`,
-        name: suggestion.title,
+        title: suggestion.title,
         parent: parentId,
         status: "pending",
         startDate: new Date().toISOString().split("T")[0],
@@ -326,27 +345,24 @@ export default function GanttChart() {
     approveSuggestionFn: (parentId: string, suggestion: SuggestedTask) => void,
     rejectSuggestionFn: (parentId: string, suggestionId: string) => void
   ): Node[] {
-    // 1. タスクをIDでマップ化
     const taskMap: Record<string, Task & { children?: Task[] }> = {};
     currentTasks.forEach((task) => {
       taskMap[task.id] = { ...task, children: [] };
     });
-    // 2. 親子関係を構築
     currentTasks.forEach((task) => {
       if (task.parent && taskMap[task.parent]) {
         taskMap[task.parent].children!.push(taskMap[task.id]);
       }
     });
-    // 3. ルートタスクを抽出
     const roots = Object.values(taskMap).filter((task) => !task.parent);
 
-    // 4. 再帰的にノード配置
     const nodes: Node[] = [];
     const nodeWidth = 280;
-    const nodeHeight = 130;
+    const nodeHeight = 130; // タスクノード自体の基本高さ
     const xGap = 350;
-    const yGap = 50;
+    const yGap = 50; // ノード間の基本的なY方向の間隔
     let globalY = 50;
+
     function placeNode(
       task: Task & { children?: Task[] },
       x: number,
@@ -354,28 +370,6 @@ export default function GanttChart() {
       parentX: number | null,
       parentY: number | null
     ): number {
-      if (
-        task.id === currentActiveSuggestionParentId ||
-        (currentSuggestedTasksMap &&
-          Object.prototype.hasOwnProperty.call(
-            currentSuggestedTasksMap,
-            task.id
-          ))
-      ) {
-        console.log(`GanttChart: placeNode for task.id [${task.id}].`);
-        console.log(
-          `GanttChart: currentSuggestedTasksMap[${task.id}] in placeNode (used for currentSuggestedTasks):`,
-          currentSuggestedTasksMap && currentSuggestedTasksMap[task.id]
-            ? currentSuggestedTasksMap[task.id]
-            : "NOT FOUND or EMPTY"
-        );
-        console.log(
-          `GanttChart: Calculated isSuggestionActive for [${task.id}]: ${
-            task.id === currentActiveSuggestionParentId
-          }`
-        );
-      }
-
       nodes.push({
         id: task.id,
         type: "taskNode",
@@ -395,24 +389,93 @@ export default function GanttChart() {
         } as TaskNodeData,
       });
 
-      if (!task.children || task.children.length === 0) {
-        return y + nodeHeight + yGap;
-      }
-      let childY = y;
-      for (let i = 0; i < task.children.length; i++) {
-        if (i === 0) {
-          childY = placeNode(task.children[i], x + xGap, y, x, y);
-        } else {
-          childY = placeNode(task.children[i], x + xGap, childY, x, y);
+      let effectiveNodeBottomY = y + nodeHeight;
+      let popupActualHeight = 0;
+
+      if (
+        task.id === currentActiveSuggestionParentId &&
+        currentSuggestedTasksMap[task.id]
+      ) {
+        const suggestions = currentSuggestedTasksMap[task.id];
+        if (suggestions.length > 0) {
+          const headerHeight = 40;
+          const itemHeight = 95;
+          const itemSpacing = 12;
+          const verticalPadding = 32;
+
+          popupActualHeight = headerHeight + verticalPadding;
+          popupActualHeight += suggestions.length * itemHeight;
+          if (suggestions.length > 1) {
+            popupActualHeight += (suggestions.length - 1) * itemSpacing;
+          }
+          effectiveNodeBottomY = Math.max(
+            y + nodeHeight,
+            y + popupActualHeight
+          );
         }
       }
-      return childY;
+
+      if (!task.children || task.children.length === 0) {
+        return effectiveNodeBottomY + yGap;
+      }
+
+      // 子がいる場合
+      let childGroupStartY = y; // デフォルトは親と同じYレベル
+      if (
+        task.id === currentActiveSuggestionParentId &&
+        popupActualHeight > 0
+      ) {
+        // 親にポップアップがあり、それが表示されている場合、
+        // 子グループの開始Yを、親のY + ポップアップの高さ + ギャップ にする。
+        childGroupStartY = y + popupActualHeight + yGap;
+      }
+
+      let currentChildProcessingY = childGroupStartY;
+      let maxDescendantBranchBottomY = childGroupStartY; // 初期値は子グループの開始Y。
+      // 子がいない場合はこれがそのまま使われることはないが、
+      // ループに入らないケースも想定し、安全な初期値。
+
+      if (task.children.length > 0) {
+        // maxDescendantBranchBottomY の初期値は、最初の子が配置されるであろう childGroupStartY。
+        // ただし、子が実際に配置されて高さが計算されると更新される。
+        // もし最初の子の高さが childGroupStartY より小さくなることは通常ないが、念のため。
+        maxDescendantBranchBottomY = childGroupStartY;
+
+        for (let i = 0; i < task.children.length; i++) {
+          const childNode = task.children[i];
+          // 最初の子は childGroupStartY から、2番目以降は前の兄弟の下から
+          const childStartY =
+            i === 0 ? childGroupStartY : currentChildProcessingY;
+
+          const childBranchBottomY = placeNode(
+            childNode,
+            x + xGap,
+            childStartY,
+            x,
+            y
+          );
+
+          currentChildProcessingY = childBranchBottomY;
+          maxDescendantBranchBottomY = Math.max(
+            maxDescendantBranchBottomY,
+            childBranchBottomY
+          );
+        }
+      } else {
+        // 子がいない場合は、このループ後のmaxDescendantBranchBottomYは使われず、
+        // effectiveNodeBottomY + yGap が返るので、このパスでの値は実質影響しない。
+        maxDescendantBranchBottomY = childGroupStartY;
+      }
+
+      return Math.max(effectiveNodeBottomY + yGap, maxDescendantBranchBottomY);
     }
+
     let startY = globalY;
     roots.forEach((root) => {
       const nextY = placeNode(root, 50, startY, null, null);
       startY = nextY;
     });
+
     return nodes;
   }
 
@@ -474,7 +537,7 @@ export default function GanttChart() {
     (suggestedTaskFromModal: SuggestedTask) => {
       const newTask: Task = {
         id: `task-${Date.now()}`,
-        name: suggestedTaskFromModal.title,
+        title: suggestedTaskFromModal.title,
         end: new Date(
           Date.now() +
             suggestedTaskFromModal.estimatedDuration * 24 * 60 * 60 * 1000

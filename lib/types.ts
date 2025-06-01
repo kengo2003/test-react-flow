@@ -1,17 +1,21 @@
-// import type { SuggestedTask } from "./types"; // 自分自身を参照しないように
-
 export interface Task {
   id: string;
-  name: string;
+  title: string;
   end: string;
   parent?: string;
   assignee?: string;
-  status: "pending" | "running" | "done";
+  status: "pending" | "running" | "done" | "suggested";
   description?: string;
   tags?: string[];
   startDate?: string;
   // dueDate?: string; // TaskNodeDataでendを使用するため、重複する可能性のあるdueDateは一旦コメントアウト
-  title?: string; // TaskNodeDataのnameと役割が被るため、どちらかに統一検討
+  // name?: string; // title と重複するため削除
+
+  // 候補タスク用のオプショナルプロパティ
+  accuracy?: number;
+  agentName?: string;
+  estimatedTime?: string;
+  // estimatedDuration は SuggestedTask に残し、startDate/endに変換する元とする
 }
 
 // TaskNodeDataの定義 (components/task-node.tsx から移動)
@@ -56,13 +60,6 @@ export interface TaskEdge {
   animated?: boolean;
 }
 
-export interface SuggestedTask {
-  id: string;
-  title: string;
-  description?: string;
+export interface SuggestedTask extends Task {
   estimatedDuration: number;
-  agentName?: string;
-  estimatedTime?: string;
-  accuracy?: number;
-  // parentId?: string; // SuggestionNodeDataに定義するため、こちらには不要
 }
