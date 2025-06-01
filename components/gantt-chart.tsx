@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import ReactFlow, {
   type Edge,
   addEdge,
@@ -12,17 +12,14 @@ import ReactFlow, {
   type Connection,
   ReactFlowProvider,
   BackgroundVariant,
+  type Node,
 } from "reactflow";
 import "reactflow/dist/style.css";
 
 import { TaskNode } from "@/components/task-node";
 import { TaskSidebar } from "@/components/task-sidebar";
 import { SuggestedTasksModal } from "@/components/suggested-tasks-modal";
-import type {
-  Task,
-  TaskNode as TaskNodeType,
-  SuggestedTask,
-} from "@/lib/types";
+import type { Task, SuggestedTask, TaskNodeData } from "@/lib/types";
 
 const nodeTypes = {
   taskNode: TaskNode,
@@ -121,12 +118,53 @@ export const mockTasks: Task[] = [
 ];
 
 export default function GanttChart() {
+  const [tasks, setTasks] = useState<Task[]>(mockTasks);
+
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [suggestedTasksModal, setSuggestedTasksModal] = useState({
     isOpen: false,
     parentTaskId: null as string | null,
   });
+
+  const [activeSuggestionParentId, setActiveSuggestionParentId] = useState<
+    string | null
+  >(null);
+  const [currentSuggestedTasks, setCurrentSuggestedTasks] = useState<
+    Record<string, SuggestedTask[]>
+  >({});
+
+  // processedTasks の定義 (tasks に依存)
+  const processedTasks = useMemo(() => {
+    return tasks.map((task) => {
+      if (!task.end) {
+        const today = new Date();
+        const defaultDue = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+        task.end = defaultDue.toISOString().split("T")[0];
+      }
+      return task;
+    });
+  }, [tasks]);
+
+  // initialEdges の定義 (processedTasks に依存)
+  const initialEdges: Edge[] = useMemo(() => {
+    return processedTasks
+      .filter((task) => task.parent)
+      .map((task) => ({
+        id: `edge-${task.parent}-${task.id}`,
+        source: task.parent!,
+        target: task.id,
+        type: "smoothstep",
+        animated: true,
+        style: {
+          stroke: "#4f46e5",
+          strokeWidth: 3,
+        },
+      }));
+  }, [processedTasks]);
+
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
 
   const handleTaskClick = useCallback((taskId: string) => {
     setSelectedTaskId(taskId);
@@ -145,33 +183,156 @@ export default function GanttChart() {
     });
   }, []);
 
-  // タスクデータの処理
-  const processedTasks = useMemo(() => {
-    return mockTasks.map((task) => {
-      // dueが欠落している場合は今日+7日を設定
-      if (!task.end) {
-        const today = new Date();
-        const defaultDue = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-        task.end = defaultDue.toISOString().split("T")[0];
+  const handleShowSuggestions = useCallback(
+    (parentId: string) => {
+      console.log(
+        `GanttChart: handleShowSuggestions called for parentId: ${parentId}`
+      );
+      setActiveSuggestionParentId(parentId);
+      // 候補タスクがまだロードされていなければロードする
+      if (
+        !currentSuggestedTasks[parentId] ||
+        currentSuggestedTasks[parentId].length === 0
+      ) {
+        const mockSuggestions: SuggestedTask[] = [
+          {
+            id: "sug1-" + parentId,
+            title: "実現可能性分析",
+            description: "技術的・ビジネス的実現可能性を分析",
+            agentName: "FeasibilityAgent",
+            estimatedTime: "2-3 min",
+            accuracy: 92,
+            estimatedDuration: 2,
+          },
+          {
+            id: "sug2-" + parentId,
+            title: "コスト見積もり",
+            description: "費用対効果、CAPEX, OPEXを算出",
+            agentName: "CostAgent",
+            estimatedTime: "3-4 min",
+            accuracy: 87,
+            estimatedDuration: 3,
+          },
+          {
+            id: "sug3-" + parentId,
+            title: "再利用性評価",
+            description: "再利用可能なパターンや既存資産を特定",
+            agentName: "ReuseAgent",
+            estimatedTime: "2-3 min",
+            accuracy: 89,
+            estimatedDuration: 2,
+          },
+        ];
+        setCurrentSuggestedTasks((prev) => ({
+          ...prev,
+          [parentId]: mockSuggestions,
+        }));
       }
-      return task;
-    });
+    },
+    [currentSuggestedTasks]
+  );
+
+  const handleHideSuggestions = useCallback(() => {
+    console.log(
+      `GanttChart: handleHideSuggestions called. activeSuggestionParentId will be set to null.`
+    );
+    setActiveSuggestionParentId(null);
   }, []);
+
+  const handleApproveSuggestion = useCallback(
+    (parentId: string, suggestion: SuggestedTask) => {
+      console.log(
+        `GanttChart: handleApproveSuggestion for parent [${parentId}], suggestion:`,
+        suggestion
+      );
+      const newTask: Task = {
+        id: `task-${Date.now()}`,
+        name: suggestion.title,
+        parent: parentId,
+        status: "pending",
+        startDate: new Date().toISOString().split("T")[0],
+        end: new Date(
+          Date.now() + suggestion.estimatedDuration * 24 * 60 * 60 * 1000
+        )
+          .toISOString()
+          .split("T")[0],
+        assignee: suggestion.agentName || "未割り当て",
+        description: suggestion.description,
+      };
+
+      setTasks((prevTasks) => [...prevTasks, newTask]);
+
+      if (newTask.parent) {
+        const newEdge: Edge = {
+          id: `edge-${newTask.parent}-${newTask.id}`,
+          source: newTask.parent,
+          target: newTask.id,
+          type: "smoothstep",
+          animated: true,
+          style: {
+            stroke: "#4f46e5",
+            strokeWidth: 3,
+          },
+        };
+        setEdges((eds) => addEdge(newEdge, eds));
+      }
+
+      setCurrentSuggestedTasks((prev) => {
+        const updatedSuggestions = { ...prev };
+        if (updatedSuggestions[parentId]) {
+          updatedSuggestions[parentId] = updatedSuggestions[parentId].filter(
+            (s) => s.id !== suggestion.id
+          );
+        }
+        if (updatedSuggestions[parentId]?.length === 0) {
+          setActiveSuggestionParentId(null);
+        }
+        return updatedSuggestions;
+      });
+    },
+    [setTasks, setEdges]
+  );
+
+  const handleRejectSuggestion = useCallback(
+    (parentId: string, suggestionId: string) => {
+      console.log(
+        `GanttChart: handleRejectSuggestion for parent [${parentId}], suggestionId: ${suggestionId}`
+      );
+      setCurrentSuggestedTasks((prev) => {
+        const updatedSuggestions = { ...prev };
+        if (updatedSuggestions[parentId]) {
+          updatedSuggestions[parentId] = updatedSuggestions[parentId].filter(
+            (s) => s.id !== suggestionId
+          );
+        }
+        if (updatedSuggestions[parentId]?.length === 0) {
+          setActiveSuggestionParentId(null);
+        }
+        return updatedSuggestions;
+      });
+    },
+    []
+  );
 
   // ノード生成ロジックを関数化
   function generateNodesFromTasks(
-    tasks: (Task & { children?: Task[] })[],
-    handleTaskClick: (taskId: string) => void,
-    handleDateChange: (taskId: string, newDate: string) => void,
-    handleSuggestTask: (taskId: string) => void
-  ): TaskNodeType[] {
+    currentTasks: (Task & { children?: Task[] })[],
+    currentActiveSuggestionParentId: string | null,
+    currentSuggestedTasksMap: Record<string, SuggestedTask[]>,
+    clickFn: (taskId: string) => void,
+    dateChangeFn: (taskId: string, newDate: string) => void,
+    showSuggestionsFn: (parentId: string) => void,
+    hideSuggestionsFn: () => void,
+    approveSuggestionFn: (parentId: string, suggestion: SuggestedTask) => void,
+    rejectSuggestionFn: (parentId: string, suggestionId: string) => void
+  ): Node[] {
     // 1. タスクをIDでマップ化
     const taskMap: Record<string, Task & { children?: Task[] }> = {};
-    tasks.forEach((task) => {
+    currentTasks.forEach((task) => {
       taskMap[task.id] = { ...task, children: [] };
     });
     // 2. 親子関係を構築
-    tasks.forEach((task) => {
+    currentTasks.forEach((task) => {
       if (task.parent && taskMap[task.parent]) {
         taskMap[task.parent].children!.push(taskMap[task.id]);
       }
@@ -180,7 +341,7 @@ export default function GanttChart() {
     const roots = Object.values(taskMap).filter((task) => !task.parent);
 
     // 4. 再帰的にノード配置
-    const nodes: TaskNodeType[] = [];
+    const nodes: Node[] = [];
     const nodeWidth = 280;
     const nodeHeight = 130;
     const xGap = 350;
@@ -189,8 +350,32 @@ export default function GanttChart() {
     function placeNode(
       task: Task & { children?: Task[] },
       x: number,
-      y: number
+      y: number,
+      parentX: number | null,
+      parentY: number | null
     ): number {
+      if (
+        task.id === currentActiveSuggestionParentId ||
+        (currentSuggestedTasksMap &&
+          Object.prototype.hasOwnProperty.call(
+            currentSuggestedTasksMap,
+            task.id
+          ))
+      ) {
+        console.log(`GanttChart: placeNode for task.id [${task.id}].`);
+        console.log(
+          `GanttChart: currentSuggestedTasksMap[${task.id}] in placeNode (used for currentSuggestedTasks):`,
+          currentSuggestedTasksMap && currentSuggestedTasksMap[task.id]
+            ? currentSuggestedTasksMap[task.id]
+            : "NOT FOUND or EMPTY"
+        );
+        console.log(
+          `GanttChart: Calculated isSuggestionActive for [${task.id}]: ${
+            task.id === currentActiveSuggestionParentId
+          }`
+        );
+      }
+
       nodes.push({
         id: task.id,
         type: "taskNode",
@@ -199,66 +384,79 @@ export default function GanttChart() {
           ...task,
           width: nodeWidth,
           height: nodeHeight,
-          onTaskClick: handleTaskClick,
-          onDateChange: handleDateChange,
-          onSuggestTask: handleSuggestTask,
-        },
+          onTaskClick: clickFn,
+          onDateChange: dateChangeFn,
+          isSuggestionActive: task.id === currentActiveSuggestionParentId,
+          currentSuggestedTasks: currentSuggestedTasksMap[task.id] || [],
+          onShowSuggestionsClick: showSuggestionsFn,
+          onHideSuggestions: hideSuggestionsFn,
+          onApproveSuggestion: approveSuggestionFn,
+          onRejectSuggestion: rejectSuggestionFn,
+        } as TaskNodeData,
       });
+
       if (!task.children || task.children.length === 0) {
         return y + nodeHeight + yGap;
       }
       let childY = y;
       for (let i = 0; i < task.children.length; i++) {
         if (i === 0) {
-          childY = placeNode(task.children[i], x + xGap, y);
+          childY = placeNode(task.children[i], x + xGap, y, x, y);
         } else {
-          childY = placeNode(task.children[i], x + xGap, childY);
+          childY = placeNode(task.children[i], x + xGap, childY, x, y);
         }
       }
       return childY;
     }
     let startY = globalY;
     roots.forEach((root) => {
-      const nextY = placeNode(root, 50, startY);
+      const nextY = placeNode(root, 50, startY, null, null);
       startY = nextY;
     });
     return nodes;
   }
 
-  // ノードの生成
-  const initialNodes: TaskNodeType[] = useMemo(() => {
+  // ノードリストを計算するための useMemo
+  const calculatedNodes = useMemo(() => {
+    console.log("GanttChart: useMemo for calculatedNodes triggered.");
+    console.log(
+      "GanttChart: activeSuggestionParentId in useMemo (for calculatedNodes):",
+      activeSuggestionParentId
+    );
+    console.log(
+      "GanttChart: currentSuggestedTasks in useMemo (for calculatedNodes):",
+      currentSuggestedTasks
+    );
     return generateNodesFromTasks(
       processedTasks,
+      activeSuggestionParentId,
+      currentSuggestedTasks,
       handleTaskClick,
       handleDateChange,
-      handleSuggestTask
+      handleShowSuggestions,
+      handleHideSuggestions,
+      handleApproveSuggestion,
+      handleRejectSuggestion
     );
-  }, [processedTasks]);
+  }, [
+    processedTasks,
+    activeSuggestionParentId,
+    currentSuggestedTasks,
+    handleTaskClick,
+    handleDateChange,
+    handleShowSuggestions,
+    handleHideSuggestions,
+    handleApproveSuggestion,
+    handleRejectSuggestion,
+  ]);
 
-  // エッジの生成（依存関係）
-  const initialEdges: Edge[] = useMemo(() => {
-    return processedTasks
-      .filter((task) => task.parent)
-      .map((task) => ({
-        id: `edge-${task.parent}-${task.id}`,
-        source: task.parent!,
-        target: task.id,
-        type: "smoothstep",
-        animated: true,
-        style: {
-          stroke: "#4f46e5",
-          strokeWidth: 3,
-        },
-      }));
-  }, [processedTasks]);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-
-  const onConnect = useCallback(
-    (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
-  );
+  // calculatedNodes が変更されたら setNodes を呼び出す useEffect
+  useEffect(() => {
+    console.log(
+      "GanttChart: useEffect to setNodes triggered. Applying calculatedNodes."
+    );
+    setNodes(calculatedNodes);
+  }, [calculatedNodes, setNodes]);
 
   const handleCloseSidebar = useCallback(() => {
     setIsSidebarOpen(false);
@@ -273,33 +471,26 @@ export default function GanttChart() {
   }, []);
 
   const handleApproveTask = useCallback(
-    (suggestedTask: SuggestedTask) => {
-      // 新しいタスクを作成
+    (suggestedTaskFromModal: SuggestedTask) => {
       const newTask: Task = {
         id: `task-${Date.now()}`,
-        name: suggestedTask.title,
+        name: suggestedTaskFromModal.title,
         end: new Date(
-          Date.now() + suggestedTask.estimatedDuration * 24 * 60 * 60 * 1000
+          Date.now() +
+            suggestedTaskFromModal.estimatedDuration * 24 * 60 * 60 * 1000
         )
           .toISOString()
           .split("T")[0],
         parent: suggestedTasksModal.parentTaskId || undefined,
         assignee: "未割り当て",
         status: "pending",
+        description: suggestedTaskFromModal.description,
+        startDate: new Date().toISOString().split("T")[0],
       };
 
-      // 新しいタスクを含めた全タスクリストを作成
-      const newTasks = [...processedTasks, newTask];
-      // ノード全体を再レイアウト
-      const newNodes = generateNodesFromTasks(
-        newTasks,
-        handleTaskClick,
-        handleDateChange,
-        handleSuggestTask
-      );
-      setNodes(newNodes);
+      setTasks((prevTasks) => [...prevTasks, newTask]);
 
-      // 依存関係のエッジを追加
+      // 既存のModalからのタスク追加時のエッジ生成はそのまま
       if (newTask.parent) {
         const newEdge: Edge = {
           id: `edge-${newTask.parent}-${newTask.id}`,
@@ -314,18 +505,14 @@ export default function GanttChart() {
         };
         setEdges((eds) => [...eds, newEdge]);
       }
-
-      console.log("新しいタスクを作成:", newTask);
+      console.log("古いモーダルから新しいタスクを作成:", newTask);
     },
-    [
-      processedTasks,
-      handleTaskClick,
-      handleDateChange,
-      handleSuggestTask,
-      setNodes,
-      setEdges,
-      suggestedTasksModal.parentTaskId,
-    ]
+    [processedTasks, suggestedTasksModal.parentTaskId, setTasks, setEdges]
+  );
+
+  const onConnect = useCallback(
+    (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
+    [setEdges]
   );
 
   return (
