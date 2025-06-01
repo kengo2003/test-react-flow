@@ -18,7 +18,6 @@ import "reactflow/dist/style.css";
 
 import { TaskNode } from "@/components/task-node";
 import { TaskSidebar } from "@/components/task-sidebar";
-import { SuggestedTasksModal } from "@/components/suggested-tasks-modal";
 import type { Task, SuggestedTask, TaskNodeData } from "@/lib/types";
 
 const nodeTypes = {
@@ -122,10 +121,6 @@ export default function GanttChart() {
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [suggestedTasksModal, setSuggestedTasksModal] = useState({
-    isOpen: false,
-    parentTaskId: null as string | null,
-  });
 
   const [activeSuggestionParentId, setActiveSuggestionParentId] = useState<
     string | null
@@ -174,13 +169,6 @@ export default function GanttChart() {
   const handleDateChange = useCallback((taskId: string, newDate: string) => {
     console.log(`PATCH /nodes/${taskId}`, { end: newDate });
     // ここで実際のAPI呼び出しを行う
-  }, []);
-
-  const handleSuggestTask = useCallback((taskId: string) => {
-    setSuggestedTasksModal({
-      isOpen: true,
-      parentTaskId: taskId,
-    });
   }, []);
 
   const handleShowSuggestions = useCallback(
@@ -526,53 +514,6 @@ export default function GanttChart() {
     setSelectedTaskId(null);
   }, []);
 
-  const handleCloseSuggestedTasks = useCallback(() => {
-    setSuggestedTasksModal({
-      isOpen: false,
-      parentTaskId: null,
-    });
-  }, []);
-
-  const handleApproveTask = useCallback(
-    (suggestedTaskFromModal: SuggestedTask) => {
-      const newTask: Task = {
-        id: `task-${Date.now()}`,
-        title: suggestedTaskFromModal.title,
-        end: new Date(
-          Date.now() +
-            suggestedTaskFromModal.estimatedDuration * 24 * 60 * 60 * 1000
-        )
-          .toISOString()
-          .split("T")[0],
-        parent: suggestedTasksModal.parentTaskId || undefined,
-        assignee: "未割り当て",
-        status: "pending",
-        description: suggestedTaskFromModal.description,
-        startDate: new Date().toISOString().split("T")[0],
-      };
-
-      setTasks((prevTasks) => [...prevTasks, newTask]);
-
-      // 既存のModalからのタスク追加時のエッジ生成はそのまま
-      if (newTask.parent) {
-        const newEdge: Edge = {
-          id: `edge-${newTask.parent}-${newTask.id}`,
-          source: newTask.parent,
-          target: newTask.id,
-          type: "smoothstep",
-          animated: true,
-          style: {
-            stroke: "#4f46e5",
-            strokeWidth: 3,
-          },
-        };
-        setEdges((eds) => [...eds, newEdge]);
-      }
-      console.log("古いモーダルから新しいタスクを作成:", newTask);
-    },
-    [processedTasks, suggestedTasksModal.parentTaskId, setTasks, setEdges]
-  );
-
   const onConnect = useCallback(
     (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
     [setEdges]
@@ -601,13 +542,6 @@ export default function GanttChart() {
         taskId={selectedTaskId}
         isOpen={isSidebarOpen}
         onClose={handleCloseSidebar}
-      />
-
-      <SuggestedTasksModal
-        isOpen={suggestedTasksModal.isOpen}
-        onClose={handleCloseSuggestedTasks}
-        parentTaskId={suggestedTasksModal.parentTaskId}
-        onApproveTask={handleApproveTask}
       />
     </div>
   );

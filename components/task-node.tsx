@@ -145,27 +145,9 @@ export const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
       {/* 候補タスクのリスト表示をここに復元 */}
       {data.isSuggestionActive && data.currentSuggestedTasks && (
         <div
-          className="absolute left-[calc(100%_+_10px)] top-0 w-[320px] bg-white border border-gray-300 rounded-lg shadow-xl z-50 p-4 space-y-3"
-          onClick={(e) => e.stopPropagation()} // イベントの伝播を止める
+          className="absolute left-[calc(100%_+_10px)] top-0 w-[320px] space-y-3"
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex justify-between items-center mb-2">
-            <h4 className="text-base font-semibold text-gray-800">
-              候補タスク
-            </h4>
-            {data.onHideSuggestions && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  data.onHideSuggestions && data.onHideSuggestions();
-                }}
-                className="p-0 h-6 w-6 text-gray-500 hover:bg-gray-100"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
           {data.currentSuggestedTasks.length === 0 ? (
             <p className="text-sm text-gray-500">
               提案できるタスクはありません。
@@ -175,7 +157,7 @@ export const TaskNode = memo(({ data, selected }: NodeProps<TaskNodeData>) => {
               <div
                 key={suggestion.id}
                 className="p-3 border border-gray-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-all duration-150 flex flex-col justify-between"
-                style={{ width: "100%", height: data.height }} // TaskNodeの高さに合わせる
+                style={{ width: "100%" }}
               >
                 {/* Main content area - similar to TaskNode */}
                 <div className="space-y-1.5 flex-grow">
